@@ -1,0 +1,43 @@
+# ----------------------------------------------------------------------
+# Ashish Vegan MP3 Player - Apache Configuration
+# Hide *.php extension & Clean URL routing
+# ----------------------------------------------------------------------
+
+Options -Indexes +FollowSymLinks
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Redirect any direct request with .php to extensionless URL (301 redirect)
+    # e.g., /index.php -> /
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/+index\.php[?\s] [NC]
+    RewriteRule ^index\.php$ / [R=301,L]
+
+    # Redirect /page.php to /page
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/+(.+)\.php[?\s] [NC]
+    RewriteRule ^(.+)\.php$ /$1 [R=301,L]
+
+    # If requested resource is not a directory and doesn't exist, check for .php
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}\.php -f
+    RewriteRule ^([^\.]+)$ $1.php [NC,L]
+</IfModule>
+
+# MIME type configuration for MP3 audio streaming
+<IfModule mod_mime.c>
+    AddType audio/mpeg .mp3
+    AddType audio/mp4 .m4a
+    AddType audio/ogg .ogg
+    AddType audio/wav .wav
+</IfModule>
+
+# Enable caching headers for static assets & audio
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType audio/mpeg "access plus 1 month"
+    ExpiresByType audio/mp4 "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/png "access plus 1 month"
+</IfModule>
