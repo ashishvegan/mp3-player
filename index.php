@@ -78,6 +78,7 @@ if (is_dir($mp3Dir)) {
             'title' => $title,
             'artist' => $artist,
             'url' => $webMp3Dir . '/' . rawurlencode($file),
+            'download_url' => '?download=' . rawurlencode($file),
             'size' => $formattedSize,
             'bytes' => $fileSize,
             'album' => 'Vegan Soundwaves 2026'
@@ -95,6 +96,44 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
         'playlist' => $playlist
     ));
     exit;
+}
+
+// Download endpoint to force file download with proper attachment headers (iOS, Android, Desktop)
+if (isset($_GET['download'])) {
+    $requestedFile = basename(trim($_GET['download']));
+    if (strpos($requestedFile, '%') !== false) {
+        $requestedFile = urldecode($requestedFile);
+    }
+    $targetFilePath = $mp3Dir . DIRECTORY_SEPARATOR . $requestedFile;
+    $ext = strtolower(pathinfo($requestedFile, PATHINFO_EXTENSION));
+    
+    // Security check: ensure valid audio extension and file exists inside mp3Dir
+    if (in_array($ext, array('mp3', 'm4a', 'wav', 'ogg', 'aac')) && file_exists($targetFilePath) && is_file($targetFilePath)) {
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+        $mime = 'application/octet-stream';
+        if ($ext === 'mp3') $mime = 'audio/mpeg';
+        elseif ($ext === 'm4a') $mime = 'audio/mp4';
+        elseif ($ext === 'wav') $mime = 'audio/wav';
+        elseif ($ext === 'ogg') $mime = 'audio/ogg';
+
+        header('Content-Description: File Transfer');
+        header('Content-Type: ' . $mime);
+        header('Content-Disposition: attachment; filename="' . str_replace('"', '', $requestedFile) . '"; filename*=UTF-8\'\'' . rawurlencode($requestedFile));
+        header('Content-Transfer-Encoding: binary');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        header('Pragma: public');
+        header('Content-Length: ' . filesize($targetFilePath));
+        readfile($targetFilePath);
+        exit;
+    } else {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "Error: Audio file not found or invalid.";
+        exit;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -291,6 +330,11 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
         .glow-pink {
             box-shadow: 0 10px 35px -5px rgba(236, 72, 153, 0.45);
         }
+
+        /* Prevent iOS Safari auto-zoom on input focus */
+        input[type="text"], input[type="search"] {
+            font-size: 16px !important;
+        }
     </style>
 </head>
 <body class="h-full w-full bg-slate-950 font-sans text-slate-100 flex flex-col items-center justify-center p-0 sm:p-4 md:p-6 select-none overflow-x-hidden antialiased">
@@ -304,14 +348,14 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
     </div>
 
     <!-- Desktop Viewport Mode Bar (Allows user to toggle between Phone Chassis & Fullscreen View on Desktop) -->
-    <header class="w-full max-w-sm mb-3 px-3 py-1.5 hidden sm:flex items-center justify-between text-xs text-slate-400">
-        <div class="flex items-center gap-2">
-            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            <span class="font-semibold tracking-wide text-slate-300">Mobile UI/UX View</span>
+    <header class="w-full max-w-md mb-3 px-4 py-1.5 hidden sm:flex items-center justify-between text-sm text-slate-300 font-medium">
+        <div class="flex items-center gap-2.5">
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span class="font-bold tracking-wide text-white">Mobile UI/UX View</span>
         </div>
         <div class="flex items-center gap-2">
-            <button id="toggleChassisBtn" class="hover:text-white transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+            <button id="toggleChassisBtn" class="hover:text-white transition-colors flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs sm:text-sm font-semibold">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                 <span id="chassisBtnText">Chassis: ON</span>
             </button>
         </div>
@@ -319,7 +363,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
 
     <!-- MOBILE PHONE CONTAINER -->
     <!-- On mobile screens: 100% full screen. On desktop: realistic flagship smartphone frame -->
-    <main id="phoneContainer" class="relative w-full sm:max-w-[395px] h-full sm:h-[844px] sm:max-h-[92vh] sm:rounded-[48px] sm:shadow-2xl sm:shadow-purple-950/80 sm:border-[10px] sm:border-slate-800/90 overflow-hidden flex flex-col transition-all duration-300">
+    <main id="phoneContainer" class="relative w-full sm:max-w-[420px] h-full sm:h-[860px] sm:max-h-[92vh] sm:rounded-[48px] sm:shadow-2xl sm:shadow-purple-950/80 sm:border-[10px] sm:border-slate-800/90 overflow-hidden flex flex-col transition-all duration-300">
 
         <!-- Phone Notch / Dynamic Island (Only in phone chassis mode) -->
         <div id="phoneIsland" class="absolute top-2.5 left-1/2 -translate-x-1/2 z-50 hidden sm:flex items-center justify-between px-3 h-7 w-28 bg-black/90 rounded-full border border-white/10 shadow-lg pointer-events-none">
@@ -335,97 +379,97 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
             <div id="ambientAura" class="absolute -top-24 left-1/2 -translate-x-1/2 w-80 h-80 bg-purple-500/30 rounded-full blur-[70px] pointer-events-none transition-all duration-1000"></div>
 
             <!-- TOP STATUS BAR -->
-            <div class="relative z-40 w-full pt-3 px-6 pb-2 flex items-center justify-between text-xs font-semibold tracking-tight text-white/90">
-                <span id="statusBarClock" class="font-display">9:41</span>
-                <div class="flex items-center space-x-2">
+            <div class="relative z-40 w-full pt-3.5 px-6 pb-2 flex items-center justify-between text-sm font-semibold tracking-tight text-white/90">
+                <span id="statusBarClock" class="font-display font-bold text-sm">9:41</span>
+                <div class="flex items-center space-x-2.5">
                     <!-- Cellular Signal -->
-                    <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 18.25A10.95 10.95 0 0 1 1 12C1 5.92 5.92 1 12 1s11 4.92 11 11c0 2.45-.8 4.71-2.16 6.55l-.62-.64C21.36 16.2 22 14.19 22 12c0-4.97-4.03-9-9-9z"/></svg>
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 18.25A10.95 10.95 0 0 1 1 12C1 5.92 5.92 1 12 1s11 4.92 11 11c0 2.45-.8 4.71-2.16 6.55l-.62-.64C21.36 16.2 22 14.19 22 12c0-4.97-4.03-9-9-9z"/></svg>
                     <!-- Wifi -->
-                    <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4zm0 2.5a14.28 14.28 0 0 1 10.22 4.22L12 18.57 1.78 10.72A14.28 14.28 0 0 1 12 6.5z"/></svg>
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98A16.88 16.88 0 0 0 12 4zm0 2.5a14.28 14.28 0 0 1 10.22 4.22L12 18.57 1.78 10.72A14.28 14.28 0 0 1 12 6.5z"/></svg>
                     <!-- Battery -->
-                    <div class="w-5 h-2.5 border border-white/80 rounded-sm p-0.5 flex items-center">
+                    <div class="w-5.5 h-3 border border-white/80 rounded-sm p-0.5 flex items-center">
                         <div class="w-full h-full bg-emerald-400 rounded-2xs"></div>
                     </div>
                 </div>
             </div>
 
             <!-- APP HEADER -->
-            <header class="relative z-30 px-5 py-2 flex items-center justify-between">
+            <header class="relative z-30 px-5 py-2.5 flex items-center justify-between">
                 <!-- Theme Swapper Button -->
-                <button id="themeToggleBtn" title="Change Gradient Theme" class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-white/90">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4 4 4 0 014-4 4 4 0 014 4 4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+                <button id="themeToggleBtn" title="Change Gradient Theme" class="glass-btn w-10 h-10 rounded-full flex items-center justify-center text-white/90">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4 4 4 0 014-4 4 4 0 014 4 4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
                 </button>
 
                 <!-- App Title -->
                 <div class="text-center flex-1 px-2">
-                    <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15">
-                        <span class="w-1.5 h-1.5 rounded-full bg-brand-neon animate-ping"></span>
-                        <span class="text-[10px] font-bold tracking-wider uppercase text-brand-neon">LIVE AUDIO</span>
+                    <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 mb-0.5">
+                        <span class="w-2 h-2 rounded-full bg-brand-neon animate-ping"></span>
+                        <span class="text-xs font-bold tracking-wider uppercase text-brand-neon">LIVE AUDIO</span>
                     </div>
-                    <h1 class="text-base font-extrabold tracking-tight text-white font-display leading-tight drop-shadow-md">
+                    <h1 class="text-lg sm:text-xl font-black tracking-tight text-white font-display leading-tight drop-shadow-md">
                         Ashish Vegan MP3
                     </h1>
                 </div>
 
                 <!-- Open Playlist Drawer Button -->
-                <button id="openPlaylistBtn" title="View Playlist" class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-white/90 relative">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
-                    <span id="playlistBadgeCount" class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-pink-500 text-[9px] font-bold flex items-center justify-center text-white border border-white/40">
+                <button id="openPlaylistBtn" title="View Playlist" class="glass-btn w-10 h-10 rounded-full flex items-center justify-center text-white/90 relative">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+                    <span id="playlistBadgeCount" class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-pink-500 text-xs font-black flex items-center justify-center text-white border border-white/40">
                         <?php echo count($playlist); ?>
                     </span>
                 </button>
             </header>
 
-            <!-- MAIN PLAYER BODY (SCROLLABLE ON SMALLER PHONE DISPLAYS) -->
-            <section class="relative z-20 flex-1 flex flex-col items-center justify-between px-6 py-2 overflow-y-auto overflow-x-hidden">
+            <!-- MAIN PLAYER BODY (OPTIMIZED TO FIT VIEWPORT SEAMLESSLY) -->
+            <section class="relative z-20 flex-1 flex flex-col items-center justify-between px-4 sm:px-6 py-1.5 overflow-hidden">
                 
                 <!-- ALBUM ART / VINYL DISC DISPLAY -->
-                <div class="relative w-full flex flex-col items-center justify-center my-auto">
+                <div class="relative w-full flex flex-col items-center justify-center my-auto py-0.5">
                     <!-- Vinyl Record Behind Art Glow -->
-                    <div class="relative w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center">
+                    <div class="relative w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center">
                         
                         <!-- Reactive Ambient Glow under Vinyl -->
                         <div id="vinylAuraGlow" class="absolute inset-0 rounded-full bg-gradient-to-tr from-purple-500/40 via-pink-500/30 to-cyan-400/40 blur-2xl transition-all duration-700"></div>
 
                         <!-- Spinning Vinyl Record -->
-                        <div id="vinylRecord" class="relative w-52 h-52 sm:w-60 sm:h-60 rounded-full vinyl-grooves shadow-2xl border-4 border-slate-900/80 flex items-center justify-center animate-spin-slow paused-spin transition-transform duration-500">
+                        <div id="vinylRecord" class="relative w-40 h-40 sm:w-48 sm:h-48 rounded-full vinyl-grooves shadow-2xl border-4 border-slate-900/80 flex items-center justify-center animate-spin-slow paused-spin transition-transform duration-500">
                             
                             <!-- Vinyl Shiny Light Reflections -->
                             <div class="absolute inset-0 rounded-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/15 via-transparent to-transparent pointer-events-none"></div>
                             <div class="absolute inset-0 rounded-full bg-[radial-gradient(ellipse_at_bottom,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent pointer-events-none"></div>
 
                             <!-- Center Artwork Cover -->
-                            <div class="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 border-slate-950/80 shadow-inner flex items-center justify-center">
-                                <div id="albumCoverBg" class="w-full h-full bg-gradient-to-tr from-violet-600 via-fuchsia-600 to-amber-400 flex flex-col items-center justify-center text-white text-center p-2">
-                                    <svg class="w-8 h-8 text-white/90 mb-1 drop-shadow" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
-                                    <span id="discCenterText" class="text-[9px] font-black uppercase tracking-wider text-white/90 line-clamp-1">Ashish Vegan</span>
+                            <div class="relative w-22 h-22 sm:w-26 sm:h-26 rounded-full overflow-hidden border-4 border-slate-950/80 shadow-inner flex items-center justify-center">
+                                <div id="albumCoverBg" class="w-full h-full bg-gradient-to-tr from-violet-600 via-fuchsia-600 to-amber-400 flex flex-col items-center justify-center text-white text-center p-1.5">
+                                    <svg class="w-6 h-6 text-white/95 mb-0.5 drop-shadow" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                                    <span id="discCenterText" class="text-[11px] sm:text-xs font-black uppercase tracking-wider text-white/95 line-clamp-1">Ashish Vegan</span>
                                 </div>
                                 <!-- Center Spindle Hole -->
-                                <div class="absolute w-6 h-6 rounded-full bg-slate-950 border-2 border-white/60 shadow-lg"></div>
+                                <div class="absolute w-5 h-5 rounded-full bg-slate-950 border-2 border-white/60 shadow-lg"></div>
                             </div>
                         </div>
 
                         <!-- Real-time Equalizer Wave Visualizer Bars Overlaid or Below Disc -->
-                        <div id="visualizerCanvasWrap" class="absolute -bottom-3 left-1/2 -translate-x-1/2 w-44 h-8 flex items-end justify-center gap-1 px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/10">
-                            <canvas id="visualizerCanvas" width="160" height="30" class="w-full h-full"></canvas>
+                        <div id="visualizerCanvasWrap" class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-40 h-7 flex items-end justify-center gap-1 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 shadow-lg">
+                            <canvas id="visualizerCanvas" width="160" height="26" class="w-full h-full"></canvas>
                         </div>
                     </div>
                 </div>
 
                 <!-- SONG INFORMATION & ARTIST -->
-                <div class="w-full text-center mt-3 mb-2 px-2">
-                    <div class="flex items-center justify-center gap-2 mb-0.5">
-                        <span id="trackNumberBadge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-white/15 text-brand-neon tracking-wide border border-white/10">
+                <div class="w-full text-center mt-2 mb-1 px-2">
+                    <div class="flex items-center justify-center gap-2 mb-1">
+                        <span id="trackNumberBadge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-white/15 text-brand-neon tracking-wide border border-white/15">
                             #01 / <?php echo str_pad(count($playlist), 2, '0', STR_PAD_LEFT); ?>
                         </span>
-                        <span id="sourceBadge" class="text-[10px] font-medium text-slate-300">
+                        <span id="sourceBadge" class="text-xs font-semibold text-purple-200/90 tracking-wide">
                             Ascending Order
                         </span>
                     </div>
-                    <h2 id="currentSongTitle" class="text-xl font-extrabold text-white tracking-tight truncate font-display drop-shadow-sm">
+                    <h2 id="currentSongTitle" class="text-2xl sm:text-3xl font-black text-white tracking-tight truncate font-display drop-shadow-md leading-tight">
                         <?php echo !empty($playlist) ? htmlspecialchars($playlist[0]['title']) : 'No MP3 Files Found'; ?>
                     </h2>
-                    <p id="currentSongArtist" class="text-sm font-medium text-purple-200/80 truncate">
+                    <p id="currentSongArtist" class="text-base sm:text-lg font-semibold text-purple-200/90 truncate mt-0.5">
                         <?php echo !empty($playlist) ? htmlspecialchars($playlist[0]['artist']) : 'Add MP3s to mp3-files/'; ?>
                     </p>
                 </div>
@@ -435,9 +479,9 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
                     <div class="relative flex items-center">
                         <input id="seekBar" type="range" min="0" max="100" value="0" step="0.1" class="seek-slider">
                     </div>
-                    <div class="flex items-center justify-between text-[11px] font-semibold text-white/70 font-mono tracking-wider">
+                    <div class="flex items-center justify-between text-xs sm:text-sm font-bold text-white/90 font-mono tracking-wider">
                         <span id="currentTimeLabel">0:00</span>
-                        <div class="flex items-center gap-1 text-[10px] text-brand-neon/80">
+                        <div class="flex items-center gap-1.5 text-xs font-black text-brand-neon tracking-widest uppercase">
                             <span id="streamStatus">READY</span>
                         </div>
                         <span id="durationTimeLabel">0:00</span>
@@ -445,96 +489,104 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
                 </div>
 
                 <!-- MAIN PLAYBACK CONTROLS -->
-                <div class="w-full py-2">
-                    <div class="flex items-center justify-between gap-1">
+                <div class="w-full py-1.5 sm:py-2">
+                    <div class="flex items-center justify-between gap-1 sm:gap-1.5">
                         <!-- Shuffle Button -->
-                        <button id="shuffleBtn" title="Toggle Shuffle" class="glass-btn w-10 h-10 rounded-full flex items-center justify-center text-white/70 hover:text-white">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4l4 6-4 6H4M20 4h-4l-2.5 3.75M20 20h-4l-4-6"/></svg>
+                        <button id="shuffleBtn" title="Toggle Shuffle" class="glass-btn w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h4l4 6-4 6H4M20 4h-4l-2.5 3.75M20 20h-4l-4-6"/></svg>
                         </button>
 
                         <!-- Skip Backward 10s -->
-                        <button id="skipBack10Btn" title="Rewind 10s" class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-white/80 hover:text-white text-xs font-bold">
+                        <button id="skipBack10Btn" title="Rewind 10s" class="glass-btn w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white/90 hover:text-white text-sm font-black">
                             -10
                         </button>
 
                         <!-- Previous Track -->
-                        <button id="prevTrackBtn" title="Previous Track" class="glass-btn w-12 h-12 rounded-full flex items-center justify-center text-white hover:text-white">
-                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                        <button id="prevTrackBtn" title="Previous Track" class="glass-btn w-12 h-12 sm:w-13 sm:h-13 rounded-full flex items-center justify-center text-white hover:text-white">
+                            <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
                         </button>
 
                         <!-- Main Play / Pause Hero Button -->
-                        <button id="playPauseBtn" title="Play / Pause" class="relative group w-16 h-16 rounded-full bg-gradient-to-tr from-brand-500 to-pink-500 hover:from-brand-400 hover:to-pink-400 text-white flex items-center justify-center shadow-lg shadow-purple-900/60 transform transition-all duration-200 active:scale-95 border-2 border-white/30">
+                        <button id="playPauseBtn" title="Play / Pause" class="relative group w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-gradient-to-tr from-brand-500 to-pink-500 hover:from-brand-400 hover:to-pink-400 text-white flex items-center justify-center shadow-xl shadow-purple-950/70 transform transition-all duration-200 active:scale-95 border-2 border-white/40">
                             <div class="absolute inset-0 rounded-full bg-white/20 blur-sm group-hover:blur-md transition-all"></div>
                             <!-- Play Icon -->
-                            <svg id="playIcon" class="w-7 h-7 fill-current translate-x-0.5" viewBox="0 0 24 24">
+                            <svg id="playIcon" class="w-8 h-8 fill-current translate-x-0.5" viewBox="0 0 24 24">
                                 <path d="M8 5v14l11-7z"/>
                             </svg>
                             <!-- Pause Icon (hidden by default) -->
-                            <svg id="pauseIcon" class="w-7 h-7 fill-current hidden" viewBox="0 0 24 24">
+                            <svg id="pauseIcon" class="w-8 h-8 fill-current hidden" viewBox="0 0 24 24">
                                 <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
                             </svg>
                         </button>
 
                         <!-- Next Track -->
-                        <button id="nextTrackBtn" title="Next Track" class="glass-btn w-12 h-12 rounded-full flex items-center justify-center text-white hover:text-white">
-                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                        <button id="nextTrackBtn" title="Next Track" class="glass-btn w-12 h-12 sm:w-13 sm:h-13 rounded-full flex items-center justify-center text-white hover:text-white">
+                            <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
                         </button>
 
                         <!-- Skip Forward 10s -->
-                        <button id="skipForward10Btn" title="Forward 10s" class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-white/80 hover:text-white text-xs font-bold">
+                        <button id="skipForward10Btn" title="Forward 10s" class="glass-btn w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white/90 hover:text-white text-sm font-black">
                             +10
                         </button>
 
                         <!-- Repeat Mode (Off, All, 1) -->
-                        <button id="repeatBtn" title="Toggle Repeat" class="glass-btn w-10 h-10 rounded-full flex items-center justify-center text-white/70 hover:text-white relative">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                            <span id="repeatIndicator" class="absolute -top-1 -right-1 text-[8px] font-black px-1 rounded-full bg-brand-neon text-slate-950 hidden">1</span>
+                        <button id="repeatBtn" title="Toggle Repeat" class="glass-btn w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white/70 hover:text-white relative">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span id="repeatIndicator" class="absolute -top-1 -right-1 text-[10px] font-black px-1.5 py-0.2 rounded-full bg-brand-neon text-slate-950 hidden">1</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- SECONDARY CONTROLS: VOLUME & SPEED PILL -->
-                <div class="w-full flex items-center justify-between gap-3 px-2 py-1 mb-2 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-md">
+                <!-- SECONDARY CONTROLS: VOLUME, SPEED & DOWNLOAD -->
+                <div class="w-full flex items-center justify-between gap-2 px-3 py-1.5 mb-1.5 bg-white/10 rounded-2xl border border-white/15 backdrop-blur-md shadow-sm">
                     <!-- Volume Control -->
-                    <div class="flex items-center gap-2 flex-1">
-                        <button id="muteBtn" title="Mute/Unmute" class="text-white/80 hover:text-white p-1">
-                            <svg id="volumeHighIcon" class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-                            <svg id="volumeMutedIcon" class="w-4 h-4 fill-current hidden" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                        <button id="muteBtn" title="Mute/Unmute" class="text-white/90 hover:text-white p-1">
+                            <svg id="volumeHighIcon" class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                            <svg id="volumeMutedIcon" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
                         </button>
-                        <input id="volumeSlider" type="range" min="0" max="1" step="0.01" value="0.85" class="seek-slider h-1">
+                        <input id="volumeSlider" type="range" min="0" max="1" step="0.01" value="0.85" class="seek-slider h-1.5 flex-1 min-w-[55px]">
                     </div>
 
-                    <div class="h-4 w-[1px] bg-white/20"></div>
+                    <div class="h-5 w-[1px] bg-white/20"></div>
 
                     <!-- Playback Speed Button -->
-                    <button id="speedBtn" title="Playback Speed" class="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-bold font-mono text-white/90 border border-white/10 tracking-tight flex items-center gap-1">
+                    <button id="speedBtn" title="Playback Speed" class="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs sm:text-sm font-bold font-mono text-white/95 border border-white/10 tracking-tight flex items-center gap-1 transition-all active:scale-95">
                         <span id="speedLabel">1.0x</span>
+                    </button>
+
+                    <div class="h-5 w-[1px] bg-white/20"></div>
+
+                    <!-- Download Active Track Button -->
+                    <button id="downloadCurrentBtn" title="Download Current Song" class="px-3 py-1.5 rounded-xl bg-brand-500/30 hover:bg-brand-500/50 text-xs sm:text-sm font-bold text-white border border-brand-400/40 tracking-tight flex items-center gap-1.5 transition-all active:scale-95 shadow-sm group">
+                        <svg class="w-4 h-4 text-brand-neon group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        <span id="downloadBtnText">Download</span>
                     </button>
                 </div>
 
             </section>
 
             <!-- BOTTOM MINI DOCK / PULL-UP PLAYLIST BAR -->
-            <footer class="relative z-30 w-full px-5 py-3.5 bg-slate-950/60 backdrop-blur-xl border-t border-white/10 flex items-center justify-between">
+            <footer class="relative z-30 w-full px-5 py-3.5 bg-slate-950/70 backdrop-blur-xl border-t border-white/10 flex items-center justify-between">
                 <div id="footerTrackInfo" class="flex items-center gap-3 cursor-pointer flex-1 min-w-0 pr-2">
-                    <div class="w-9 h-9 rounded-xl bg-brand-600/60 border border-white/20 flex items-center justify-center shadow-md flex-shrink-0">
-                        <svg class="w-4 h-4 text-brand-neon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                    <div class="w-10 h-10 rounded-xl bg-brand-600/60 border border-white/20 flex items-center justify-center shadow-md flex-shrink-0">
+                        <svg class="w-5 h-5 text-brand-neon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
                     </div>
                     <div class="min-w-0">
-                        <p id="miniTrackTitle" class="text-xs font-bold text-white truncate">
+                        <p id="miniTrackTitle" class="text-sm sm:text-base font-bold text-white truncate">
                             <?php echo !empty($playlist) ? htmlspecialchars($playlist[0]['title']) : 'Playlist'; ?>
                         </p>
-                        <p class="text-[10px] text-slate-300 flex items-center gap-1">
+                        <p class="text-xs text-slate-300 flex items-center gap-1.5 font-medium">
                             <span>Tap to view Playlist</span>
-                            <span class="text-brand-neon">▲</span>
+                            <span class="text-brand-neon font-bold">▲</span>
                         </p>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-2">
                     <!-- Quick Playlist Open Pill -->
-                    <button id="showPlaylistPillBtn" class="px-3 py-1.5 rounded-full bg-brand-500/30 hover:bg-brand-500/50 border border-brand-400/40 text-xs font-semibold text-brand-200 flex items-center gap-1.5 transition-all">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16"/></svg>
+                    <button id="showPlaylistPillBtn" class="px-3.5 py-2 rounded-full bg-brand-500/30 hover:bg-brand-500/50 border border-brand-400/40 text-xs sm:text-sm font-bold text-brand-200 flex items-center gap-1.5 transition-all active:scale-95 shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16"/></svg>
                         <span>Queue (<?php echo count($playlist); ?>)</span>
                     </button>
                 </div>
@@ -549,48 +601,48 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
             <div id="playlistDrawer" class="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-2xl flex flex-col transform translate-y-full transition-transform duration-300 ease-out">
                 
                 <!-- Drawer Header -->
-                <div class="p-5 pb-3 border-b border-white/10 flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 rounded-lg bg-pink-500/30 border border-pink-400/40 flex items-center justify-center text-pink-300">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
+                <div class="p-5 pb-3.5 border-b border-white/10 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-pink-500/30 border border-pink-400/40 flex items-center justify-center text-pink-300">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/></svg>
                         </div>
                         <div>
-                            <h3 class="text-base font-bold text-white font-display">Audio Playlist</h3>
-                            <p class="text-[11px] text-slate-400">Sorted in Ascending Order (<span id="drawerCountText"><?php echo count($playlist); ?></span> tracks)</p>
+                            <h3 class="text-base sm:text-lg font-black text-white font-display">Audio Playlist</h3>
+                            <p class="text-xs sm:text-sm text-slate-300">Ascending Order • <span id="drawerCountText" class="font-bold text-brand-neon"><?php echo count($playlist); ?></span> tracks</p>
                         </div>
                     </div>
 
                     <!-- Close Drawer Button -->
-                    <button id="closePlaylistBtn" class="glass-btn w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    <button id="closePlaylistBtn" class="glass-btn w-9 h-9 rounded-full flex items-center justify-center text-white/90 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
 
                 <!-- Playlist Search & Filter Bar -->
-                <div class="px-5 py-2.5">
+                <div class="px-5 py-3">
                     <div class="relative">
-                        <input id="playlistSearchInput" type="text" placeholder="Search track or artist..." class="w-full pl-9 pr-4 py-2 rounded-xl bg-white/10 border border-white/15 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-brand-neon focus:ring-1 focus:ring-brand-neon">
-                        <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <input id="playlistSearchInput" type="text" placeholder="Search track or artist..." class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-sm sm:text-base text-white placeholder-slate-400 focus:outline-none focus:border-brand-neon focus:ring-1 focus:ring-brand-neon">
+                        <svg class="w-5 h-5 text-slate-400 absolute left-3.5 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                     </div>
                 </div>
 
                 <!-- Playlist Scrollable Items List -->
-                <div id="playlistContainer" class="flex-1 overflow-y-auto px-4 py-2 space-y-1.5">
+                <div id="playlistContainer" class="flex-1 overflow-y-auto px-4 py-2 space-y-2">
                     <!-- Populated dynamically by JavaScript -->
                 </div>
 
                 <!-- Local File Adder & Help Footer -->
-                <div class="p-4 bg-slate-900/80 border-t border-white/10 space-y-2">
-                    <div class="flex items-center justify-between text-[11px] text-slate-400">
-                        <span>Directory: <code class="text-brand-neon font-mono">mp3-files/</code></span>
-                        <button id="refreshPlaylistBtn" class="hover:text-white flex items-center gap-1 text-[11px] text-brand-300 font-semibold">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <div class="p-4 sm:p-5 bg-slate-900/90 border-t border-white/10 space-y-2.5">
+                    <div class="flex items-center justify-between text-xs sm:text-sm text-slate-300">
+                        <span>Directory: <code class="text-brand-neon font-mono font-semibold">mp3-files/</code></span>
+                        <button id="refreshPlaylistBtn" class="hover:text-white flex items-center gap-1.5 text-xs sm:text-sm text-brand-300 font-bold">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             <span>Reload</span>
                         </button>
                     </div>
                     <!-- Drop/File Input option for user convenience -->
-                    <label class="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-dashed border-white/20 text-xs font-semibold text-slate-200 cursor-pointer transition-colors">
-                        <svg class="w-4 h-4 text-brand-neon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <label class="w-full flex items-center justify-center gap-2.5 py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-dashed border-white/25 text-sm font-bold text-slate-100 cursor-pointer transition-colors active:scale-[0.99]">
+                        <svg class="w-5 h-5 text-brand-neon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         <span>Add Local MP3 to Queue</span>
                         <input id="localFileInput" type="file" accept="audio/*" multiple class="hidden">
                     </label>
@@ -600,13 +652,17 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
         </div>
     </main>
 
-    <!-- Hidden HTML5 Audio Element -->
-    <audio id="audioElement" preload="metadata" crossorigin="anonymous"></audio>
+    <!-- Hidden HTML5 Audio Element (optimized with playsinline & preload for iOS background playback) -->
+    <audio id="audioElement" preload="auto" playsinline webkit-playsinline></audio>
 
     <!-- Client-side Audio Logic & Playlist Management -->
     <script>
         // Pre-loaded playlist from server-side PHP (Already naturally sorted in Ascending order)
         const serverPlaylist = <?php echo json_encode($playlist); ?>;
+
+        // Detect iOS devices (iPhone, iPad, iPod, or Safari on iPadOS)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
         // Player State
         const state = {
@@ -648,6 +704,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
         const repeatIndicator = document.getElementById('repeatIndicator');
         const speedBtn = document.getElementById('speedBtn');
         const speedLabel = document.getElementById('speedLabel');
+        const downloadCurrentBtn = document.getElementById('downloadCurrentBtn');
+        const downloadBtnText = document.getElementById('downloadBtnText');
         const themeToggleBtn = document.getElementById('themeToggleBtn');
         const appGradientBg = document.getElementById('appGradientBg');
         const ambientAura = document.getElementById('ambientAura');
@@ -694,10 +752,23 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
 
         // Initialize Web Audio API Analyser for Visualizer
         function initAudioContext() {
+            // CRITICAL FOR IPHONE / IOS BACKGROUND AUDIO:
+            // Web Audio API AudioContext is immediately suspended by iOS Safari when the screen turns off or locks.
+            // If <audio> is piped into AudioContext via createMediaElementSource(), audio playback is forcibly muted/killed!
+            // By bypassing createMediaElementSource() on iOS, <audio> operates in native CoreAudio hardware mode,
+            // allowing seamless background playback and lockscreen controls when the screen is turned off.
+            if (isIOS) {
+                renderFallbackVisualizer();
+                return;
+            }
+
             if (state.audioContext) return;
             try {
                 const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                if (!AudioCtx) return;
+                if (!AudioCtx) {
+                    renderFallbackVisualizer();
+                    return;
+                }
                 state.audioContext = new AudioCtx();
                 state.analyser = state.audioContext.createAnalyser();
                 state.analyser.fftSize = 64;
@@ -724,9 +795,10 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
 
             function draw() {
                 requestAnimationFrame(draw);
+                if (document.hidden) return; // Save battery and avoid iOS tab throttling while locked
+
                 if (!state.analyser || !state.isPlaying) {
                     ctx.clearRect(0, 0, width, height);
-                    // Draw idle baseline
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
                     ctx.fillRect(0, height - 3, width, 2);
                     return;
@@ -743,7 +815,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
                     const freqIndex = Math.floor(i * (state.dataArray.length / barCount));
                     const barHeight = Math.max(3, (state.dataArray[freqIndex] / 255) * height);
 
-                    // Dynamic gradient bar
                     const grad = ctx.createLinearGradient(0, height, 0, 0);
                     grad.addColorStop(0, '#8b5cf6');
                     grad.addColorStop(0.5, '#ec4899');
@@ -768,6 +839,8 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
 
             function drawFake() {
                 requestAnimationFrame(drawFake);
+                if (document.hidden) return; // Save resources while screen off
+
                 ctx.clearRect(0, 0, width, height);
                 if (!state.isPlaying) {
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
@@ -793,6 +866,42 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
             drawFake();
         }
 
+        // Trigger visualizer resume when returning to tab
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && state.isPlaying) {
+                if (isIOS || !state.analyser) {
+                    renderFallbackVisualizer();
+                } else {
+                    renderVisualizer();
+                }
+            }
+        });
+
+        // Download Song Helper (Triggers server attachment download or client blob download)
+        function downloadSong(song) {
+            if (!song) return;
+
+            // If local uploaded file object / blob
+            if (song.url && song.url.startsWith('blob:')) {
+                const a = document.createElement('a');
+                a.href = song.url;
+                a.download = song.filename || 'track.mp3';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                return;
+            }
+
+            // Server-side forced download with Content-Disposition: attachment header
+            const downloadUrl = song.download_url || ('?download=' + encodeURIComponent(song.filename));
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.setAttribute('download', song.filename || 'track.mp3');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
         // Render Playlist Drawer Items
         function renderPlaylist(filter = '') {
             playlistContainer.innerHTML = '';
@@ -804,9 +913,9 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
 
             if (filtered.length === 0) {
                 playlistContainer.innerHTML = `
-                    <div class="text-center py-8 text-slate-400 text-xs">
-                        <p class="font-bold text-slate-300">No tracks match "${filter}"</p>
-                        <p class="mt-1">Place .mp3 files inside <code class="text-brand-neon">mp3-files/</code></p>
+                    <div class="text-center py-8 text-slate-300 text-sm">
+                        <p class="font-bold text-white text-base">No tracks match "${filter}"</p>
+                        <p class="mt-1 text-slate-400">Place .mp3 files inside <code class="text-brand-neon font-semibold">mp3-files/</code></p>
                     </div>
                 `;
                 return;
@@ -817,16 +926,16 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
                 const isCurrent = originalIndex === state.currentIndex;
 
                 const item = document.createElement('div');
-                item.className = `flex items-center justify-between p-3 rounded-2xl transition-all cursor-pointer ${
+                item.className = `flex items-center justify-between p-3.5 rounded-2xl transition-all cursor-pointer ${
                     isCurrent 
                     ? 'bg-gradient-to-r from-brand-600/40 via-purple-600/30 to-pink-600/20 border border-brand-400/50 shadow-md' 
                     : 'bg-white/5 hover:bg-white/10 border border-white/5'
                 }`;
 
                 item.innerHTML = `
-                    <div class="flex items-center gap-3 min-w-0 flex-1">
-                        <div class="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-xs font-black ${
-                            isCurrent ? 'bg-brand-500 text-white shadow-lg shadow-purple-900/50' : 'bg-white/10 text-slate-300'
+                    <div class="flex items-center gap-3.5 min-w-0 flex-1">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center font-mono text-sm font-black flex-shrink-0 ${
+                            isCurrent ? 'bg-brand-500 text-white shadow-lg shadow-purple-900/50' : 'bg-white/10 text-slate-200'
                         }">
                             ${isCurrent && state.isPlaying ? `
                                 <div class="flex items-end justify-center gap-0.5 h-4 w-4">
@@ -836,31 +945,49 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
                                 </div>
                             ` : (originalIndex + 1).toString().padStart(2, '0')}
                         </div>
-                        <div class="min-w-0 flex-1">
-                            <h4 class="text-xs font-bold text-white truncate ${isCurrent ? 'text-brand-neon' : ''}">
+                        <div class="min-w-0 flex-1 pr-1">
+                            <h4 class="text-sm sm:text-base font-bold text-white truncate ${isCurrent ? 'text-brand-neon' : ''}">
                                 ${song.title}
                             </h4>
-                            <p class="text-[10px] text-slate-400 truncate">
-                                ${song.artist} • <span class="font-mono">${song.size || ''}</span>
+                            <p class="text-xs text-slate-300 truncate mt-0.5">
+                                ${song.artist} • <span class="font-mono text-slate-400">${song.size || ''}</span>
                             </p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2 pl-2">
                         ${isCurrent ? `
-                            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-brand-neon/20 text-brand-neon border border-brand-neon/40">
+                            <span class="text-xs font-black px-2.5 py-1 rounded-full bg-brand-neon/20 text-brand-neon border border-brand-neon/40">
                                 PLAYING
                             </span>
                         ` : `
-                            <span class="text-[10px] text-slate-400">#${originalIndex + 1}</span>
+                            <span class="text-xs font-bold text-slate-400">#${originalIndex + 1}</span>
                         `}
+                        <button class="download-song-btn glass-btn w-9 h-9 rounded-xl flex items-center justify-center text-brand-neon hover:text-white hover:bg-white/20 transition-all flex-shrink-0 active:scale-95" title="Download ${song.title}" data-index="${originalIndex}">
+                            <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        </button>
                     </div>
                 `;
 
+                // Handle row click to play song
                 item.addEventListener('click', () => {
                     loadSong(originalIndex);
                     playAudio();
                     closePlaylistDrawer();
                 });
+
+                // Handle separate download button click
+                const dlBtn = item.querySelector('.download-song-btn');
+                if (dlBtn) {
+                    dlBtn.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Avoid triggering song playback
+                        const songToDl = state.playlist[originalIndex];
+                        if (songToDl) {
+                            dlBtn.classList.add('scale-110', 'bg-brand-500/40');
+                            downloadSong(songToDl);
+                            setTimeout(() => dlBtn.classList.remove('scale-110', 'bg-brand-500/40'), 600);
+                        }
+                    });
+                }
 
                 playlistContainer.appendChild(item);
             });
@@ -915,20 +1042,26 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
         function playAudio() {
             initAudioContext();
             if (state.audioContext && state.audioContext.state === 'suspended') {
-                state.audioContext.resume();
+                state.audioContext.resume().catch(() => {});
             }
 
-            audio.play().then(() => {
-                state.isPlaying = true;
-                playIcon.classList.add('hidden');
-                pauseIcon.classList.remove('hidden');
-                vinylRecord.classList.remove('paused-spin');
-                streamStatus.textContent = 'PLAYING';
-                renderPlaylist(playlistSearchInput.value);
-            }).catch(e => {
-                console.warn('Playback error:', e);
-                streamStatus.textContent = 'CLICK PLAY';
-            });
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    state.isPlaying = true;
+                    playIcon.classList.add('hidden');
+                    pauseIcon.classList.remove('hidden');
+                    vinylRecord.classList.remove('paused-spin');
+                    streamStatus.textContent = 'PLAYING';
+                    if ('mediaSession' in navigator) {
+                        navigator.mediaSession.playbackState = 'playing';
+                    }
+                    renderPlaylist(playlistSearchInput.value);
+                }).catch(e => {
+                    console.warn('Playback error:', e);
+                    streamStatus.textContent = 'CLICK PLAY';
+                });
+            }
         }
 
         // Pause Audio
@@ -939,6 +1072,9 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
             pauseIcon.classList.add('hidden');
             vinylRecord.classList.add('paused-spin');
             streamStatus.textContent = 'PAUSED';
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
             renderPlaylist(playlistSearchInput.value);
         }
 
@@ -971,7 +1107,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
         // Previous Track
         function prevTrack() {
             if (state.playlist.length === 0) return;
-            // If track played more than 3 seconds, rewind to start first
             if (audio.currentTime > 3) {
                 audio.currentTime = 0;
                 return;
@@ -1010,6 +1145,16 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
                 const progress = (audio.currentTime / audio.duration) * 100;
                 seekBar.value = progress;
                 currentTimeLabel.textContent = formatTime(audio.currentTime);
+
+                if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+                    try {
+                        navigator.mediaSession.setPositionState({
+                            duration: audio.duration,
+                            playbackRate: audio.playbackRate || 1.0,
+                            position: Math.min(audio.currentTime, audio.duration)
+                        });
+                    } catch (err) {}
+                }
             }
         });
 
@@ -1024,6 +1169,15 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
 
         audio.addEventListener('playing', () => {
             streamStatus.textContent = 'PLAYING';
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'playing';
+            }
+        });
+
+        audio.addEventListener('pause', () => {
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
         });
 
         seekBar.addEventListener('input', (e) => {
@@ -1047,7 +1201,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
             } else if (state.repeatMode === 'all') {
                 nextTrack();
             } else {
-                // If repeat is off and it's the last song, pause
                 if (state.currentIndex === state.playlist.length - 1 && !state.isShuffle) {
                     pauseAudio();
                 } else {
@@ -1126,6 +1279,29 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
             speedLabel.textContent = `${state.playbackSpeed.toFixed(2).replace(/\.00$/, '')}x`;
         });
 
+        // Download Current Track Button
+        if (downloadCurrentBtn) {
+            downloadCurrentBtn.addEventListener('click', () => {
+                if (state.playlist.length === 0) return;
+                const currentSong = state.playlist[state.currentIndex];
+                if (!currentSong) return;
+
+                const origText = downloadBtnText ? downloadBtnText.textContent : 'Download';
+                if (downloadBtnText) downloadBtnText.textContent = 'Saving...';
+                downloadCurrentBtn.classList.add('bg-brand-500/50', 'border-brand-neon');
+
+                downloadSong(currentSong);
+
+                setTimeout(() => {
+                    if (downloadBtnText) downloadBtnText.textContent = 'Saved!';
+                    setTimeout(() => {
+                        if (downloadBtnText) downloadBtnText.textContent = origText;
+                        downloadCurrentBtn.classList.remove('bg-brand-500/50', 'border-brand-neon');
+                    }, 1200);
+                }, 500);
+            });
+        }
+
         // Theme Toggle (Cycle through colorful gradient backgrounds)
         themeToggleBtn.addEventListener('click', () => {
             appGradientBg.classList.remove(state.themes[state.currentThemeIndex]);
@@ -1166,7 +1342,6 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
             const files = Array.from(e.target.files);
             if (files.length === 0) return;
 
-            // Sort added local files ascending
             files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 
             files.forEach(file => {
@@ -1178,6 +1353,7 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
                     title: file.name.replace(/\.[^/.]+$/, ''),
                     artist: 'Local Device',
                     url: url,
+                    download_url: url,
                     size: sizeMb,
                     bytes: file.size,
                     album: 'User Uploads'
@@ -1194,12 +1370,12 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
         toggleChassisBtn.addEventListener('click', () => {
             state.isChassis = !state.isChassis;
             if (state.isChassis) {
-                phoneContainer.classList.add('sm:max-w-[395px]', 'sm:h-[844px]', 'sm:rounded-[48px]', 'sm:border-[10px]');
+                phoneContainer.classList.add('sm:max-w-[420px]', 'sm:h-[860px]', 'sm:rounded-[48px]', 'sm:border-[10px]');
                 phoneIsland.classList.remove('hidden');
                 phoneIsland.classList.add('hidden', 'sm:flex');
                 chassisBtnText.textContent = 'Chassis: ON';
             } else {
-                phoneContainer.classList.remove('sm:max-w-[395px]', 'sm:h-[844px]', 'sm:rounded-[48px]', 'sm:border-[10px]');
+                phoneContainer.classList.remove('sm:max-w-[420px]', 'sm:h-[860px]', 'sm:rounded-[48px]', 'sm:border-[10px]');
                 phoneIsland.classList.add('hidden');
                 phoneIsland.classList.remove('sm:flex');
                 chassisBtnText.textContent = 'Chassis: OFF (Full)';
@@ -1237,12 +1413,26 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
             navigator.mediaSession.setActionHandler('pause', pauseAudio);
             navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
             navigator.mediaSession.setActionHandler('nexttrack', nextTrack);
-            navigator.mediaSession.setActionHandler('seekbackward', () => {
-                audio.currentTime = Math.max(0, audio.currentTime - 10);
+            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+                const offset = details.seekOffset || 10;
+                audio.currentTime = Math.max(0, audio.currentTime - offset);
             });
-            navigator.mediaSession.setActionHandler('seekforward', () => {
-                audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10);
+            navigator.mediaSession.setActionHandler('seekforward', (details) => {
+                const offset = details.seekOffset || 10;
+                audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + offset);
             });
+            try {
+                navigator.mediaSession.setActionHandler('seekto', (details) => {
+                    if (details.fastSeek && 'fastSeek' in audio) {
+                        audio.fastSeek(details.seekTime);
+                    } else {
+                        audio.currentTime = details.seekTime;
+                    }
+                });
+            } catch (e) {}
+            try {
+                navigator.mediaSession.setActionHandler('stop', pauseAudio);
+            } catch (e) {}
         }
 
         // Initialize App
@@ -1256,3 +1446,4 @@ if (isset($_GET['api']) && $_GET['api'] === 'playlist') {
     </script>
 </body>
 </html>
+

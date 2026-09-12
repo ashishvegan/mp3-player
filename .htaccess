@@ -41,3 +41,10 @@ DirectoryIndex index.php
     ExpiresByType image/svg+xml "access plus 1 month"
     ExpiresByType image/png "access plus 1 month"
 </IfModule>
+
+# Streaming and partial content headers for mobile & iOS background playback
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Accept-Ranges bytes
+</IfModule>
+
